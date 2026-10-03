@@ -128,10 +128,7 @@ void Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons) {
       w_acc += (size_t)neurons[i] * neurons[i + 1];
     }
 
-    // here in the comment below, friends, you can see the
-    // effects of a blind, foolish search and replace
-
-    // store the ruNNing accumulator as the offset for layer i
+    // store the running accumulator as the offset for layer i
     topo->val_offsets[i] = v_acc;
     v_acc += neurons[i];
   }
@@ -156,6 +153,8 @@ typedef struct {
   float* weights_deltas;
   float*  biases_deltas;
 
+  float*  memory_pool; // Contiguous memory block for all network parameters and buffers
+
   Topology topo;
 
   Activation hidden_layer_activation;
@@ -163,7 +162,7 @@ typedef struct {
 } MLP;
 
 /**
- * Initialise a neural network
+ * Initialise a neural network using a single memory pool allocation
  * Note: This only allocates memory,
  * To populate the network w/ random parameters, use the MLP_populate() function instead
  */
@@ -184,16 +183,18 @@ void MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activation
     all_size += topo.layer_sizes[i];
   }
 
-  // allocate memory
-  input->weights        = (float*) malloc(weights_size * sizeof(float));
-  input->weights_deltas = (float*) malloc(weights_size * sizeof(float));
+  // Allocate a single contiguous memory block for all arrays
+  size_t total_floats = (2 * weights_size) + (5 * all_size);
+  input->memory_pool = (float*) malloc(total_floats * sizeof(float));
 
-  input->biases         = (float*) malloc(all_size * sizeof(float));
-  input->values         = (float*) malloc(all_size * sizeof(float));
-  input->raw_sums       = (float*) malloc(all_size * sizeof(float));
-
-  input->values_deltas  = (float*) malloc(all_size * sizeof(float));
-  input->biases_deltas  = (float*) malloc(all_size * sizeof(float));
+  // Slice the memory pool into individual internal pointers
+  input->weights        = input->memory_pool;
+  input->weights_deltas = input->weights + weights_size;
+  input->biases         = input->weights_deltas + weights_size;
+  input->values         = input->biases + all_size;
+  input->raw_sums       = input->values + all_size;
+  input->values_deltas  = input->raw_sums + all_size;
+  input->biases_deltas  = input->values_deltas + all_size;
 }
 
 // index lookup helpers
@@ -219,7 +220,7 @@ void MLP_populate(MLP* input, Initialisation initialisation_method, unsigned int
 
   Topology* topo = &(input->topo);
 
-  // initialize biases to zero (standard prACTice across all three methods)
+  // initialize biases to zero (standard practice across all three methods)
   size_t all_size = 0;
   for (uint16_t i = 0; i < topo->num_layers; ++i) {
     all_size += topo->layer_sizes[i];
@@ -271,13 +272,15 @@ void MLP_populate(MLP* input, Initialisation initialisation_method, unsigned int
 }
 
 void MLP_free(MLP* input) {
-  free(input->weights);
-  free(input->biases);
-  free(input->values);
-  free(input->raw_sums);
-  free(input->values_deltas);
-  free(input->weights_deltas);
-  free(input->biases_deltas);
+  free(input->memory_pool);
+  input->memory_pool = NULL;
+  input->weights = NULL;
+  input->weights_deltas = NULL;
+  input->biases = NULL;
+  input->values = NULL;
+  input->raw_sums = NULL;
+  input->values_deltas = NULL;
+  input->biases_deltas = NULL;
 
   Topology_free( &(input->topo) );
 }
@@ -373,12 +376,12 @@ void MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func) {
     float t = targets[j];
     float derivative = apply_activation_derivative(mlp->output_layer_activation, a);
 
-    // derivative of Loss w.r.t activated output (a - t for MSE, etc.)
+    // derivative of loss w.r.t activated output (a - t for MSE, etc.)
     float loss_derv = 0.0;
     if (loss_func == LOSS_MSE || loss_func == LOSS_ASE) {
       loss_derv = (a - t); // factor of 2 can be absorbed into learning rate
     } else if (loss_func == LOSS_binary_cross_entropy) {
-      // Prevent division by zero
+      // prevent division by zero
       float eps = 1e-15;
       float clamped_a = fmax(eps, fmin(1.0 - eps, a));
       loss_derv = (clamped_a - t) / (clamped_a * (1.0 - clamped_a));
