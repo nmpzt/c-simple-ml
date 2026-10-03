@@ -1,9 +1,8 @@
 # Very simple machine learning library in C
 
-A lightweight, header-only multilayer perceptron library written in C.
+A small single-header-only multilayer perceptron 'library' written in C.
 
 ## Features
-
 - **Activation functions**:
   - Linear (`ACT_linear`)
   - ReLU (`ACT_relu`)
@@ -17,11 +16,15 @@ A lightweight, header-only multilayer perceptron library written in C.
 - **Loss Functions**:
   - Mean Squared Error (`LOSS_MSE`)
   - Absolute Squared Error (`LOSS_ASE`)
-  - Binary Cross-Entropy (`LOSS_binary_cross_entropy`)
+  - Binary Cross-Entropy (`LOSS_binary_cross_entropy`) (I should rename it)
 - **Save & load**: Save and load trained model weights, biases, and topologies to/from disk using clean binary serialization (`MLP_save` / `MLP_load`).
+- **Error**: These are returned as enums of type `MLPE_CODE`:
+  - `MLPE_SUCCESS` (value 0): Success.
+  - `MLPE_MALLOC`: Memory allocation failed.
+  - `MLPE_FILE_ERROR`: Errors related to file operations in the saving and loading network part, which are opening and reading.
+  - `MLPE_WHAT`: Unknown error. (this isn't used)
 
 ## API Reference
-
 ### Topology Management
 - `void Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons)`: Initializes the network structure and caches weight/value offsets.
 - `void Topology_free(Topology* topo)`: Frees topology memory.
@@ -38,26 +41,26 @@ A lightweight, header-only multilayer perceptron library written in C.
 - `void MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)`: Computes gradients via backpropagation for a single training sample.
 - `void MLP_update_weights(MLP* mlp, float learning_rate)`: Applies gradient descent to update weights and biases.
 - `void MLP_train_step(MLP* mlp, float inputs[], float targets[], float learning_rate, Loss_func loss_func)`: Runs a single forward pass, backpropagation, and weight update.
-- `void MLP_train(...)`: Standard batch training loop across multiple epochs.
-- `void MLP_train_logged(...)`: Training loop with periodic loss evaluation and logging callback support.
+- `void MLP_train(<a lot of stuff>)` Standard batch training loop across multiple epochs.
+- `void MLP_train_logged(<a lot of stuff>)`: Training loop with periodic loss evaluation and logging callback support.
 
 ### Saving & Loading
 - `int MLP_save(const MLP* mlp, const char* filename)`: Serializes network metadata, layer sizes, weights, and biases to binary.
-- `int MLP_load(MLP* mlp, const char* filename)`: Restores a network from a binary model file.
+- `int MLP_load(MLP* mlp, const char* filename)`: Restores a network from a binary model file. This also allocates the memory for the network.
 
 ## Compilation
 
 Compile it however you want! (with `-lm`).
 
 ## Demos
-There are found in the `demos` folder (shocking, I know).
+There are found in the `demos` folder (shocking, I know). Navigate to it and just run the makefile, then run them in order:
 - `demo0.c`: Train an XOR model and store it in the `models` folder.
 - `demo1.c`: Load the XOR model from the `models` folder and test it in real time.
 - `demo2.c`: Train a simple spiral seperation model.
 - `plot_demo2.c`: Plots the output model of `demo2.c`. This will output a file named `output.ppm` that you'll need a .ppm viewer to view.
 
 ## Issues
-- Lack of errors/fallback.
-- Doesn't work with openmp for some reason: I tried to parallelise it using `omp.h`, then it just didn't work anymore.
+- Doesn't work with openmp for some reason: I tried to parallelise it using `omp.h`, then it just didn't work anymore. It's probably because of race conditions and such.
 - Doesn't output to a more universal format, just unreadable binary files: I really don't know of a universal MLP format.
 - Because of the last reason, it's kinda hard to test it.
+- The training functions' signatures are massive.
