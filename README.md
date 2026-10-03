@@ -26,27 +26,27 @@ A small single-header-only multilayer perceptron 'library' written in C.
 
 ## API Reference
 ### Topology Management
-- `void Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons)`: Initializes the network structure and caches weight/value offsets.
-- `void Topology_free(Topology* topo)`: Frees topology memory.
+- `MLPE_CODE Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons)`: Initializes the network structure and caches weight/value offsets.
+- `MLPE_CODE Topology_free(Topology* topo)`: Frees topology memory.
 
 ### Network Lifecycle
-- `void MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activation output_act)`: Allocates memory for weights, biases, values, and gradient deltas.
-- `void MLP_populate(MLP* input, Initialisation initialisation_method, unsigned int seed)`: Populates weights using Zero, Xavier, or He initialization.
-- `void MLP_free(MLP* input)`: Safely frees all memory associated with the network and its topology.
+- `MLPE_CODE MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activation output_act)`: Allocates memory for weights, biases, values, and gradient deltas.
+- `MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, unsigned int seed)`: Populates weights using Zero, Xavier, or He initialization.
+- `MLPE_CODE MLP_free(MLP* input)`: Safely frees all memory associated with the network and its topology.
 
 ### Execution & Training
-- `void MLP_set_inputs(MLP* mlp, float values[])`: Loads input features into the input layer.
-- `void MLP_evaluate(MLP* mlp)`: Performs forward propagation.
-- `void MLP_get_outputs(MLP* mlp, float* rop)`: Extracts predictions from the output layer.
-- `void MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)`: Computes gradients via backpropagation for a single training sample.
-- `void MLP_update_weights(MLP* mlp, float learning_rate)`: Applies gradient descent to update weights and biases.
-- `void MLP_train_step(MLP* mlp, float inputs[], float targets[], float learning_rate, Loss_func loss_func)`: Runs a single forward pass, backpropagation, and weight update.
-- `void MLP_train(<a lot of stuff>)` Standard batch training loop across multiple epochs.
-- `void MLP_train_logged(<a lot of stuff>)`: Training loop with periodic loss evaluation and logging callback support.
+- `MLPE_CODE MLP_set_inputs(MLP* mlp, float values[])`: Loads input features into the input layer.
+- `MLPE_CODE MLP_evaluate(MLP* mlp)`: Performs forward propagation.
+- `MLPE_CODE MLP_get_outputs(MLP* mlp, float* rop)`: Extracts predictions from the output layer.
+- `MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)`: Computes gradients via backpropagation for a single training sample.
+- `MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate)`: Applies gradient descent to update weights and biases.
+- `MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], float learning_rate, Loss_func loss_func)`: Runs a single forward pass, backpropagation, and weight update.
+- `MLPE_CODE MLP_train(<a lot of stuff>)` Standard batch training loop across multiple epochs.
+- `MLPE_CODE MLP_train_logged(<a lot of stuff>)`: Training loop with periodic loss evaluation and logging callback support.
 
 ### Saving & Loading
-- `int MLP_save(const MLP* mlp, const char* filename)`: Serializes network metadata, layer sizes, weights, and biases to binary.
-- `int MLP_load(MLP* mlp, const char* filename)`: Restores a network from a binary model file. This also allocates the memory for the network.
+- `MLPE_CODE MLP_save(const MLP* mlp, const char* filename)`: Serializes network metadata, layer sizes, weights, and biases to binary.
+- `MLPE_CODE MLP_load(MLP* mlp, const char* filename)`: Restores a network from a binary model file. This also allocates the memory for the network.
 
 ## Compilation
 
