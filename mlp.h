@@ -75,7 +75,7 @@ float ACT_leaky_reluf(float input) {
 }
 
 float ACT_logisticf(float input) {
-  return 1.l / (1.l + expf(-input));
+  return 1.f / (1.f + expf(-input));
 }
 
 float ACT_tanhf(float input) {
@@ -85,7 +85,7 @@ float ACT_tanhf(float input) {
 // and their derivatives
 
 float derv_linearf(float input) {
-  return 1.l;
+  return 1.f;
 }
 
 float derv_reluf(float input) {
@@ -420,7 +420,7 @@ MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)
       loss_derv = (a - t); // factor of 2 can be absorbed into learning rate
     } else if (loss_func == LOSS_binary_cross_entropy) {
       // prevent division by zero
-      float eps = 1e-15;
+      float eps = 1e-15f;
       float clamped_a = fmax(eps, fmin(1.0 - eps, a));
       loss_derv = (clamped_a - t) / (clamped_a * (1.0 - clamped_a));
     }

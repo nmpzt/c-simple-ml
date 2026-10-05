@@ -19,7 +19,7 @@ A small single-header-only multilayer perceptron 'library' written in C (`mlp.h`
   - `LOSS_binary_cross_entropy`: Binary Cross-Entropy. (I should probably change the name)
 - **Error Codes**: `MLPE_CODE`
   - `MLPE_SUCCESS` (value 0): Success.
-  - `MLPE_VOID_PTR`: Null pointer passed into function;
+  - `MLPE_NULL_PTR`: Null pointer passed into function;
   - `MLPE_MALLOC`: Memory allocation failed.
   - `MLPE_FILE_ERROR`: Errors related to file opening, reading, or writing.
   - `MLPE_WHAT`: Unknown error (reserved).
@@ -50,7 +50,7 @@ A small single-header-only multilayer perceptron 'library' written in C (`mlp.h`
 
 ## Compilation
 
-Compile it however you want! It's I made it so it depends on very little things. (use `-lm`)
+Compile it however you want! (with `-lm`)
 
 ## Demos
 These are found in the `demos` folder. Navigate to it and just run the makefile, then run them in order:
