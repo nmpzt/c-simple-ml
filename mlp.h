@@ -1,5 +1,3 @@
-// my first try making a neural network header in C
-
 #pragma once
 
 #include <stddef.h> // size_t
@@ -11,9 +9,10 @@
 // MLPE stands for MLP error
 typedef enum {
   MLPE_SUCCESS = 0,
+  MLPE_NULL_PTR,     // void pointer passed into function
   MLPE_MALLOC,
   MLPE_FILE_ERROR,
-  MLPE_WHAT,    // unknown i guess
+  MLPE_WHAT,         // unknown i guess
 } MLPE_CODE;
 
 #ifndef PI_F
@@ -24,18 +23,14 @@ typedef enum {
 #define PI2_F 6.28318548202514648438f
 #endif
 
-#ifndef INVERSE_OF_TWO_PLUS_RAND_MAX
-#define INVERSE_OF_TWO_PLUS_RAND_MAX (1.f / ((float)RAND_MAX + 2.f))
-#endif
-
 static float random_standard_normal(void) {
   // Z1 = sqrt(-2 ln U1) * cos 2pi U2
   float u1;
   do {
-    u1 = ((float)rand() + 1.f) * INVERSE_OF_TWO_PLUS_RAND_MAX;
+    u1 = ((float)rand() + 1.f) / ((float)RAND_MAX + 2.f);
   } while (u1 <= 0.0f || u1 > 1.0f);
 
-  float u2 = ((float)rand() + 1.f) * INVERSE_OF_TWO_PLUS_RAND_MAX;
+  float u2 = ((float)rand() + 1.f) / ((float)RAND_MAX + 2.f);
 
   return sqrtf(-2.f * logf(u1)) * cosf(PI2_F * u2);
 }
@@ -120,6 +115,7 @@ typedef struct {
 // e.g. {2, 3, 1} means the layers have 2, 3, 1 neurons respectively
 
 MLPE_CODE Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons) {
+  if (!topo || !neurons) return MLPE_NULL_PTR;
   topo->num_layers = layers;
   topo->layer_sizes = (uint16_t*) malloc(layers * sizeof(uint16_t));
 
@@ -133,7 +129,6 @@ MLPE_CODE Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons) {
   }
 
   topo->val_offsets = (size_t*) malloc(layers * sizeof(size_t));
-
   if (!topo->val_offsets) {
     free(topo->layer_sizes);
     free(topo->weight_offsets);
@@ -160,6 +155,7 @@ MLPE_CODE Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons) {
 }
 
 MLPE_CODE Topology_free(Topology* topo) {
+  if (!topo) return MLPE_NULL_PTR;
   topo->num_layers = 0;
   free(topo->layer_sizes);
   free(topo->weight_offsets);
@@ -193,6 +189,7 @@ typedef struct {
  * To populate the network w/ random parameters, use the MLP_populate() function instead
  */
 MLPE_CODE MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activation output_act) {
+  if (!input) return MLPE_NULL_PTR;
   input->topo = topo;
   input->hidden_layer_activation = hidden_act;
   input->output_layer_activation = output_act;
@@ -215,12 +212,12 @@ MLPE_CODE MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activ
 
   // slice the memory pool into individual internal pointers
   input->weights        = input->memory_pool;
-  input->weights_deltas = input->weights + weights_size;
+  input->weights_deltas = input->weights        + weights_size;
   input->biases         = input->weights_deltas + weights_size;
-  input->values         = input->biases + all_size;
-  input->raw_sums       = input->values + all_size;
-  input->values_deltas  = input->raw_sums + all_size;
-  input->biases_deltas  = input->values_deltas + all_size;
+  input->values         = input->biases         + all_size;
+  input->raw_sums       = input->values         + all_size;
+  input->values_deltas  = input->raw_sums       + all_size;
+  input->biases_deltas  = input->values_deltas  + all_size;
 
   return MLPE_SUCCESS;
 }
@@ -244,6 +241,7 @@ static inline size_t val_index(size_t layer, size_t ind, const Topology* topo) {
  * Populates the neural network using the chosen initialisation
  */
 MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, unsigned int seed) {
+  if (!input) return MLPE_NULL_PTR;
   // seed
   srand(seed);
 
@@ -274,7 +272,7 @@ MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, unsigne
     for (uint16_t l = 0; l < topo->num_layers - 1; ++l) {
       float n_in  = (float)topo->layer_sizes[l];
       float n_out = (float)topo->layer_sizes[l + 1];
-      float stddev = sqrt(2.0 / (n_in + n_out));
+      float stddev = sqrtf(2.f / (n_in + n_out));
 
       for (size_t target = 0; target < topo->layer_sizes[l + 1]; ++target) {
         for (size_t source = 0; source < topo->layer_sizes[l]; ++source) {
@@ -288,7 +286,7 @@ MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, unsigne
     // He initialization: normal distribution with stddev = sqrt(2 / n_in)
     for (uint16_t l = 0; l < topo->num_layers - 1; ++l) {
       float n_in = (float)topo->layer_sizes[l];
-      float stddev = sqrt(2.0 / n_in);
+      float stddev = sqrtf(2.f / n_in);
 
       for (size_t target = 0; target < topo->layer_sizes[l + 1]; ++target) {
         for (size_t source = 0; source < topo->layer_sizes[l]; ++source) {
@@ -321,6 +319,7 @@ void MLP_free(MLP* input) {
  * Otherwise there will be a demon at your doorstep tonight.
  */
 MLPE_CODE MLP_set_inputs(MLP* mlp, float values[]) {
+  if (!mlp) return MLPE_NULL_PTR;
   uint16_t firstlayer_size = mlp->topo.layer_sizes[0];
   for (uint16_t i = 0; i < firstlayer_size; ++i) {
     mlp->values[val_index(0, i,  &(mlp->topo) )] = values[i];
@@ -333,6 +332,7 @@ MLPE_CODE MLP_set_inputs(MLP* mlp, float values[]) {
  * Set rop's value to that of the network's last layer
  */
 MLPE_CODE MLP_get_outputs(MLP* mlp, float* rop) {
+  if (!mlp) return MLPE_NULL_PTR;
   const size_t last_layer_index = mlp->topo.num_layers - 1;
   const size_t last_layer_size = mlp->topo.layer_sizes[last_layer_index];
 
@@ -356,6 +356,7 @@ static float apply_activation(Activation act, float input) {
 }
 
 MLPE_CODE MLP_evaluate(MLP* mlp) {
+  if (!mlp) return MLPE_NULL_PTR;
   const Topology* topo = &(mlp->topo);
 
   // iterate through each layer, starting from the first hidden layer (layer 1)
@@ -401,6 +402,7 @@ static float apply_activation_derivative(Activation act, float activated_val) {
  * Computes backprop for a single training sample given the target outputs.
  */
 MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func) {
+  if (!mlp || !targets) return MLPE_NULL_PTR;
   const Topology* topo = &(mlp->topo);
   uint16_t L = topo->num_layers - 1; // index of output layer
   size_t output_size = topo->layer_sizes[L];
@@ -478,6 +480,7 @@ MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)
  * Applies gradient descent to update weights and biases using the computed deltas
  */
 MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate) {
+  if (!mlp) return MLPE_NULL_PTR;
   const Topology* topo = &(mlp->topo);
 
   // update weights
@@ -508,17 +511,23 @@ MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate) {
  * Performs a single training step for a single input-target pair
  */
 MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], float learning_rate, Loss_func loss_func) {
+  if (!mlp || !inputs || !targets) return MLPE_NULL_PTR;
+  MLPE_CODE ecode = MLPE_SUCCESS;
   // det the input values to the network's input layer
-  MLP_set_inputs(mlp, inputs);
+  ecode = MLP_set_inputs(mlp, inputs);
+  if (ecode) return ecode;
 
   // perform the forward pass to compute predictions
-  MLP_evaluate(mlp);
+  ecode = MLP_evaluate(mlp);
+  if (ecode) return ecode;
 
   // perform backpropagation to compute gradients (deltas)
-  MLP_backpropagate(mlp, targets, loss_func);
+  ecode = MLP_backpropagate(mlp, targets, loss_func);
+  if (ecode) return ecode;
 
   // update the weights and biases using gradient descent
-  MLP_update_weights(mlp, learning_rate);
+  ecode = MLP_update_weights(mlp, learning_rate);
+  if (ecode) return ecode;
 
   return MLPE_SUCCESS;
 }
@@ -533,17 +542,20 @@ MLPE_CODE MLP_train(MLP* mlp,
               size_t epochs,
               float learning_rate,
               Loss_func loss_func) {
+  if (!mlp || !dataset_inputs || !dataset_targets || !*dataset_inputs || !*dataset_targets) return MLPE_NULL_PTR;
 
+  MLPE_CODE ecode = MLPE_SUCCESS;
   for (size_t epoch = 0; epoch < epochs; ++epoch) {
     for (size_t i = 0; i < num_samples; ++i) {
-      MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], learning_rate, loss_func);
+      ecode = MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], learning_rate, loss_func);
+      if (ecode) return ecode;
     }
   }
 
   return MLPE_SUCCESS;
 }
 
-// Note: This function is slower than its unlogged equivalent due to the overhead
+// NOTE: This function is slower than its unlogged equivalent due to the overhead
 MLPE_CODE MLP_train_logged(MLP* mlp,
               float** dataset_inputs,
               float** dataset_targets,
@@ -552,7 +564,8 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
               float learning_rate,
               Loss_func loss_func,
               size_t log_step,
-              void (*log_func)(MLP* nn, size_t epoch_num, float avg_loss)) {
+              void (*logging_func)(MLP* nn, size_t epoch_num, float avg_loss)) {
+  if (!mlp || !dataset_inputs || !dataset_targets || !*dataset_inputs || !*dataset_targets || !logging_func) return MLPE_NULL_PTR;
 
   size_t output_size = mlp->topo.layer_sizes[mlp->topo.num_layers - 1];
   float* output = (float*)malloc(output_size * sizeof(float));
@@ -560,15 +573,19 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
 
   for (size_t epoch = 0; epoch < epochs; ++epoch) {
     for (size_t i = 0; i < num_samples; ++i) {
-      MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], learning_rate, loss_func);
+      MLPE_CODE ecode = MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], learning_rate, loss_func);
+      if (ecode) return ecode;
     }
 
-    if ((epoch + 1) % log_step == 0 && log_func != NULL) {
+    if ((epoch + 1) % log_step == 0 && logging_func != NULL) {
       float total_loss = 0.0f;
       for (size_t i = 0; i < num_samples; ++i) {
-        MLP_set_inputs(mlp, dataset_inputs[i]);
-        MLP_evaluate(mlp);
-        MLP_get_outputs(mlp, output);
+        MLPE_CODE ecode = MLP_set_inputs(mlp, dataset_inputs[i]);
+        if (ecode) return ecode;
+        ecode = MLP_evaluate(mlp);
+        if (ecode) return ecode;
+        ecode = MLP_get_outputs(mlp, output);
+        if (ecode) return ecode;
 
         for (size_t j = 0; j < output_size; ++j) {
           float a = output[j];
@@ -584,7 +601,7 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
         }
       }
       float avg_loss = total_loss / (float)num_samples;
-      log_func(mlp, epoch, avg_loss);
+      logging_func(mlp, epoch, avg_loss);
     }
   }
   free(output);
@@ -596,6 +613,7 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
  * Saves the neural network structure, configurations, weights, and biases to a binary file.
  */
 MLPE_CODE MLP_save(const MLP* mlp, const char* filename) {
+  if (!mlp || !filename) return MLPE_NULL_PTR;
   FILE* file = fopen(filename, "wb");
   if (!file) {
     return MLPE_FILE_ERROR;
@@ -634,7 +652,8 @@ MLPE_CODE MLP_save(const MLP* mlp, const char* filename) {
  * Loads a neural network structure, weights, and biases from a binary file
  * Automatically handles memory allocation for the network and topology
  */
-int MLP_load(MLP* mlp, const char* filename) {
+MLPE_CODE MLP_load(MLP* mlp, const char* filename) {
+  if (!mlp || !filename) return MLPE_NULL_PTR;
   FILE* file = fopen(filename, "rb");
   if (!file) {
     return MLPE_FILE_ERROR;
@@ -665,8 +684,13 @@ int MLP_load(MLP* mlp, const char* filename) {
 
   // initialize topology and neural network memory structures
   Topology topo;
-  Topology_init(&topo, num_layers, layer_sizes);
-  free(layer_sizes); // Topology_init makes its own internal copy
+  MLPE_CODE ecode = Topology_init(&topo, num_layers, layer_sizes);
+  if (ecode) {
+    free(layer_sizes);
+    fclose(file);
+    return ecode;
+  }
+  free(layer_sizes); // Topology_init makes its own copy
 
   MLP_initialise(mlp, topo, hidden_act, output_act);
 
@@ -687,7 +711,7 @@ int MLP_load(MLP* mlp, const char* filename) {
     // cleanup if read fails mid-way
     MLP_free(mlp);
     fclose(file);
-    return -1;
+    return MLPE_FILE_ERROR;
   }
 
   fclose(file);

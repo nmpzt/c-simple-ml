@@ -12,6 +12,5 @@ all: $(PROGS)
 
 clean:
 	rm -f $(PROGS) *.exe
-	rm output.ppm
-	rm ./models/xor_model.bin
-	rm ./models/spiral_model.bin
+	rm *.ppm
+	rm ./models/*.bin
