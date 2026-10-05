@@ -19,7 +19,7 @@ A small single-header-only multilayer perceptron 'library' written in C (`mlp.h`
   - `LOSS_binary_cross_entropy`: Binary Cross-Entropy. (I should probably change the name)
 - **Error Codes**: `MLPE_CODE`
   - `MLPE_SUCCESS` (value 0): Success.
-  - `MLPE_VOID_PTR`: Null pointer passed into function;
+  - `MLPE_NULL_PTR`: Null pointer passed into function;
   - `MLPE_MALLOC`: Memory allocation failed.
   - `MLPE_FILE_ERROR`: Errors related to file opening, reading, or writing.
   - `MLPE_WHAT`: Unknown error (reserved).
