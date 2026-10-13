@@ -37,12 +37,12 @@ A small single-header-only multilayer perceptron 'library' written in C (`mlp.h`
 ### Execution & Training
 - `MLPE_CODE MLP_set_inputs(MLP* mlp, float values[])`: Loads input features into the input layer.
 - `MLPE_CODE MLP_evaluate(MLP* mlp)`: Performs forward propagation.
-- `MLPE_CODE MLP_get_outputs(MLP* mlp, float* rop)`: Extracts predictions from the output layer.
+- `MLPE_CODE MLP_get_outputs(MLP* mlp, float* dest)`: Extracts predictions from the output layer.
 - `MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)`: Computes gradients via backpropagation for a single training sample.
 - `MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate)`: Applies gradient descent to update weights and biases.
 - `MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], float learning_rate, Loss_func loss_func)`: Runs a single forward pass, backpropagation, and weight update.
 - `MLPE_CODE MLP_train([a lot of inputs, see the .h file])`: Standard batch training loop across multiple epochs.
-- `MLPE_CODE MLP_train_logged([a lot of inputs, see the .h file])`: Training loop with periodic loss evaluation and logging callback support.
+- `MLPE_CODE MLP_train_logged([a LOT of inputs, see the .h file])`: Training loop with periodic loss evaluation and logging callback support.
 
 ### Saving & Loading
 - `MLPE_CODE MLP_save(const MLP* mlp, const char* filename)`: Saves network a network to memory.

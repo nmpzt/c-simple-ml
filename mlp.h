@@ -1,3 +1,6 @@
+// TODO: Use a 'better' RNG instead of the default RNG,
+// whose state is global and can be affected by other parts of the program.
+
 #pragma once
 
 #include <stddef.h> // size_t
@@ -9,7 +12,7 @@
 // MLPE stands for MLP error
 typedef enum {
   MLPE_SUCCESS = 0,
-  MLPE_NULL_PTR,     // void pointer passed into function
+  MLPE_NULL_PTR,     // null pointer passed into function
   MLPE_MALLOC,
   MLPE_FILE_ERROR,
   MLPE_WHAT,         // unknown i guess
@@ -23,12 +26,12 @@ typedef enum {
 #define PI2_F 6.28318548202514648438f
 #endif
 
-static float random_standard_normal(void) {
+static float random_normal(void) {
   // Z1 = sqrt(-2 ln U1) * cos 2pi U2
   float u1;
   do {
     u1 = ((float)rand() + 1.f) / ((float)RAND_MAX + 2.f);
-  } while (u1 <= 0.0f || u1 > 1.0f);
+  } while (u1 <= 0.0f || u1 > 1.f);
 
   float u2 = ((float)rand() + 1.f) / ((float)RAND_MAX + 2.f);
 
@@ -58,50 +61,50 @@ typedef enum {
 // ACTivation functions
 
 #ifndef LEAKY_RELU_CONST
-#define LEAKY_RELU_CONST 0.01
+#define LEAKY_RELU_CONST 0.01f
 #endif
 
-float ACT_linearf(float input) {
+static inline float ACT_linearf(float input) {
   return input; // i shouldn't have made this function
 }
 
-float ACT_reluf(float input) {
+static inline float ACT_reluf(float input) {
   return (input < 0) ? 0 : input;
 }
 
-float ACT_leaky_reluf(float input) {
-  input *= (input < 0) ? LEAKY_RELU_CONST : 1;
+static inline float ACT_leaky_reluf(float input) {
+  input *= (input < 0.f) ? LEAKY_RELU_CONST : 1.f;
   return input;
 }
 
-float ACT_logisticf(float input) {
+static inline float ACT_logisticf(float input) {
   return 1.f / (1.f + expf(-input));
 }
 
-float ACT_tanhf(float input) {
+static inline float ACT_tanhf(float input) {
   return tanhf(input);
 }
 
 // and their derivatives
 
-float derv_linearf(float input) {
+static inline float derv_linearf(float input) {
   return 1.f;
 }
 
-float derv_reluf(float input) {
-  return (input < 0) ? 0 : 1;
+static inline float derv_reluf(float input) {
+  return (input < 0.f) ? 0.f : 1.f;
 }
 
-float derv_leaky_reluf(float input) {
-  return (input < 0) ? LEAKY_RELU_CONST : 1;
+static inline float derv_leaky_reluf(float input) {
+  return (input < 0.f) ? LEAKY_RELU_CONST : 1.f;
 }
 
-float derv_logisticf(float activated_value) {
-  return activated_value * (1 - activated_value);
+static inline float derv_logisticf(float activated_value) {
+  return activated_value * (1.f - activated_value);
 }
 
-float derv_tanhf(float activated_value) {
-  return 1 - activated_value * activated_value;
+static inline float derv_tanhf(float activated_value) {
+  return 1.f - activated_value * activated_value;
 }
 
 // topology
@@ -116,6 +119,7 @@ typedef struct {
 
 MLPE_CODE Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons) {
   if (!topo || !neurons) return MLPE_NULL_PTR;
+
   topo->num_layers = layers;
   topo->layer_sizes = (uint16_t*) malloc(layers * sizeof(uint16_t));
 
@@ -277,7 +281,7 @@ MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, unsigne
       for (size_t target = 0; target < topo->layer_sizes[l + 1]; ++target) {
         for (size_t source = 0; source < topo->layer_sizes[l]; ++source) {
           size_t idx = weights_index(l, target, source, topo);
-          input->weights[idx] = random_standard_normal() * stddev;
+          input->weights[idx] = random_normal() * stddev;
         }
       }
     }
@@ -291,7 +295,7 @@ MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, unsigne
       for (size_t target = 0; target < topo->layer_sizes[l + 1]; ++target) {
         for (size_t source = 0; source < topo->layer_sizes[l]; ++source) {
           size_t idx = weights_index(l, target, source, topo);
-          input->weights[idx] = random_standard_normal() * stddev;
+          input->weights[idx] = random_normal() * stddev;
         }
       }
     }
@@ -301,6 +305,7 @@ MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, unsigne
 }
 
 void MLP_free(MLP* input) {
+  if (!input) return;
   free(input->memory_pool);
   input->memory_pool = NULL;
   input->weights = NULL;
@@ -329,15 +334,15 @@ MLPE_CODE MLP_set_inputs(MLP* mlp, float values[]) {
 }
 
 /**
- * Set rop's value to that of the network's last layer
+ * Set dest's value to that of the network's last layer
  */
-MLPE_CODE MLP_get_outputs(MLP* mlp, float* rop) {
+MLPE_CODE MLP_get_outputs(MLP* mlp, float* dest) {
   if (!mlp) return MLPE_NULL_PTR;
   const size_t last_layer_index = mlp->topo.num_layers - 1;
   const size_t last_layer_size = mlp->topo.layer_sizes[last_layer_index];
 
   for (size_t i = 0; i < last_layer_size; ++i) {
-    rop[i] = mlp->values[val_index(last_layer_index, i, &(mlp->topo) )];
+    dest[i] = mlp->values[val_index(last_layer_index, i, &(mlp->topo) )];
   }
 
   return MLPE_SUCCESS;
@@ -394,7 +399,7 @@ static float apply_activation_derivative(Activation act, float activated_val) {
     case ACT_leaky_relu:   return derv_leaky_reluf(activated_val);
     case ACT_logistic:     return derv_logisticf(activated_val);
     case ACT_tanh:         return derv_tanhf(activated_val);
-    default:               return 1.0;
+    default:               return 1.f;
   }
 }
 
@@ -421,8 +426,8 @@ MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)
     } else if (loss_func == LOSS_binary_cross_entropy) {
       // prevent division by zero
       float eps = 1e-15f;
-      float clamped_a = fmax(eps, fmin(1.0 - eps, a));
-      loss_derv = (clamped_a - t) / (clamped_a * (1.0 - clamped_a));
+      float clamped_a = fmaxf(eps, fminf(1.f - eps, a));
+      loss_derv = (clamped_a - t) / (clamped_a * (1.f - clamped_a));
     }
 
     mlp->values_deltas[v_idx] = loss_derv * derivative;
@@ -513,7 +518,7 @@ MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate) {
 MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], float learning_rate, Loss_func loss_func) {
   if (!mlp || !inputs || !targets) return MLPE_NULL_PTR;
   MLPE_CODE ecode = MLPE_SUCCESS;
-  // det the input values to the network's input layer
+  // set the input values to the network's input layer
   ecode = MLP_set_inputs(mlp, inputs);
   if (ecode) return ecode;
 
@@ -576,6 +581,7 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
       MLPE_CODE ecode = MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], learning_rate, loss_func);
       if (ecode) return ecode;
     }
+    const float samples_inv = 1.f / (float) num_samples;
 
     if ((epoch + 1) % log_step == 0 && logging_func != NULL) {
       float total_loss = 0.0f;
@@ -595,12 +601,12 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
             total_loss += diff * diff;
           } else if (loss_func == LOSS_binary_cross_entropy) {
             float eps = 1e-15f;
-            float clamped_a = fmaxf(eps, fminf(1.0f - eps, a));
-            total_loss -= (t * logf(clamped_a) + (1.0f - t) * logf(1.0f - clamped_a));
+            float clamped_a = fmaxf(eps, fminf(1.f - eps, a));
+            total_loss -= (t * logf(clamped_a) + (1.f - t) * logf(1.f - clamped_a));
           }
         }
       }
-      float avg_loss = total_loss / (float)num_samples;
+      float avg_loss = total_loss * samples_inv;
       logging_func(mlp, epoch, avg_loss);
     }
   }
@@ -691,8 +697,14 @@ MLPE_CODE MLP_load(MLP* mlp, const char* filename) {
     return ecode;
   }
   free(layer_sizes); // Topology_init makes its own copy
+  layer_sizes = NULL;
 
-  MLP_initialise(mlp, topo, hidden_act, output_act);
+  ecode = MLP_initialise(mlp, topo, hidden_act, output_act);
+  if (ecode) {
+    Topology_free(&topo);
+    fclose(file);
+    return ecode;
+  }
 
   // calculate expected array sizes
   size_t weights_size = 0;
