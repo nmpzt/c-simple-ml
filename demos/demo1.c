@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <assert.h>
 
+#define MLP_H_IMPLEMENTATION
 #include "../mlp.h"
 
 int main(void) {

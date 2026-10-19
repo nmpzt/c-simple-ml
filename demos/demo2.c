@@ -2,14 +2,16 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
+#define MLP_H_IMPLEMENTATION
 #include "../mlp.h"
 
 #define NUM_SAMPLES_PER_CLASS 250
 #define TOTAL_SAMPLES (2 * NUM_SAMPLES_PER_CLASS)
 
-void generate_spiral_dataset(float*** out_inputs, float*** out_targets) {
+void generate_spiral_dataset(float*** out_inputs, float*** out_targets, XS256_state* rng) {
   float** inputs = (float**)malloc(TOTAL_SAMPLES * sizeof(float*));
   float** targets = (float**)malloc(TOTAL_SAMPLES * sizeof(float*));
 
@@ -24,9 +26,13 @@ void generate_spiral_dataset(float*** out_inputs, float*** out_targets) {
       float r = (float)i / (float)NUM_SAMPLES_PER_CLASS * 1.5f;
       float t = (float)i / (float)NUM_SAMPLES_PER_CLASS * 2.5f * PI_F + (class_idx * PI_F);
       
-      // add noise
-      float noise_x = ((float)rand() / (float)RAND_MAX - 0.5f) * 0.1f;
-      float noise_y = ((float)rand() / (float)RAND_MAX - 0.5f) * 0.1f;
+      // add noise using xoshiro or standard rand; let's use xoshiro-derived values via a uniform factor
+      float factor = 1.f / ((float)UINT64_MAX + 2.f);
+      float u1 = ((float)XS256_rand(rng) + 1.f) * factor;
+      float u2 = ((float)XS256_rand(rng) + 1.f) * factor;
+
+      float noise_x = (u1 - 0.5f) * 0.1f;
+      float noise_y = (u2 - 0.5f) * 0.1f;
 
       inputs[idx][0] = r * sinf(t) + noise_x;
       inputs[idx][1] = r * cosf(t) + noise_y;
@@ -53,17 +59,18 @@ void log_function(MLP* nn, size_t epoch_num, float avg_loss) {
 
 int main(int argc, char** argv) {
   if (argc == 1) {
-    printf("Usage: %s <seed>", argv[0]);
+    printf("Usage: %s <seed>\n", argv[0]);
     return 0;
   }
   puts("Initialising...");
 
-  unsigned int seed = atoi(argv[1]);
-  srand((unsigned int)time(NULL));
+  uint64_t seed = (uint64_t)strtoull(argv[1], NULL, 10);
+  XS256_state rng;
+  XS256_seed(&rng, seed);
 
   float** dataset_inputs = NULL;
   float** dataset_targets = NULL;
-  generate_spiral_dataset(&dataset_inputs, &dataset_targets);
+  generate_spiral_dataset(&dataset_inputs, &dataset_targets, &rng);
 
   Topology mytopo;
   Topology_init(&mytopo, 4, (uint16_t[]) {2, 16, 16, 1});
@@ -71,9 +78,9 @@ int main(int argc, char** argv) {
   MLP mymlp;
   MLP_initialise(&mymlp, mytopo, ACT_tanh, ACT_logistic);
 
-  MLP_populate(&mymlp, INIT_He, 42);
+  MLP_populate(&mymlp, INIT_He, &rng);
 
-  puts("Trainign...");
+  puts("Training...");
   size_t epochs = 2000;
   float learning_rate = 0.05f;
 

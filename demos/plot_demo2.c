@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+
+#define MLP_H_IMPLEMENTATION
 #include "../mlp.h"
 
 #define RESOLUTION 1080

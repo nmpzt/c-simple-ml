@@ -3,9 +3,13 @@
 #include <stdio.h>
 #include <assert.h>
 
+#define MLP_H_IMPLEMENTATION
 #include "../mlp.h"
 
 int main(void) {
+  XS256_state rng;
+  XS256_seed(&rng, 666);
+
   Topology mytopo;
   Topology_init(&mytopo, 3, (uint16_t[]) {2, 3, 1});
 
@@ -13,7 +17,7 @@ int main(void) {
 
   MLP_initialise(&mymlp, mytopo, ACT_logistic, ACT_logistic);
 
-  MLP_populate(&mymlp, INIT_Xavier, 666);
+  MLP_populate(&mymlp, INIT_Xavier, &rng);
 
   float* learning_inputs[] = {
     (float[]) {0.f, 0.f},
@@ -45,4 +49,3 @@ int main(void) {
 
   return 0;
 }
-
