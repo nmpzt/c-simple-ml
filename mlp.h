@@ -6,7 +6,9 @@
 #include <stdio.h>
 #include <math.h>   // math.h
 
+// ====================
 // DECLARATIONS SECTION
+// ====================
 
 // XOSHIRO256** implementation
 typedef struct {
@@ -67,52 +69,6 @@ typedef enum {
   LOSS_binary_cross_entropy,
 } Loss_func;
 
-// ACTivation functions
-#ifndef LEAKY_RELU_CONST
-#define LEAKY_RELU_CONST 0.01f
-#endif
-
-static inline float ACT_linearf(float input) {
-  return input;
-}
-
-static inline float ACT_reluf(float input) {
-  return (input < 0.f) ? 0.f : input;
-}
-
-static inline float ACT_leaky_reluf(float input) {
-  return input * ((input < 0.f) ? LEAKY_RELU_CONST : 1.f);
-}
-
-static inline float ACT_logisticf(float input) {
-  return 1.f / (1.f + expf(-input));
-}
-
-static inline float ACT_tanhf(float input) {
-  return tanhf(input);
-}
-
-// and their derivatives
-static inline float derv_linearf(float input) {
-  return 1.f;
-}
-
-static inline float derv_reluf(float input) {
-  return (input < 0.f) ? 0.f : 1.f;
-}
-
-static inline float derv_leaky_reluf(float input) {
-  return (input < 0.f) ? LEAKY_RELU_CONST : 1.f;
-}
-
-static inline float derv_logisticf(float activated_value) {
-  return activated_value * (1.f - activated_value);
-}
-
-static inline float derv_tanhf(float activated_value) {
-  return 1.f - activated_value * activated_value;
-}
-
 // topology
 typedef struct {
   uint16_t  num_layers;
@@ -171,10 +127,57 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
 MLPE_CODE MLP_save(const MLP* mlp, const char* filename);
 MLPE_CODE MLP_load(MLP* mlp, const char* filename);
 
-
+// ===================
 // DEFINITIONS SECTION
+// ===================
 
 #ifdef MLP_H_IMPLEMENTATION
+
+// ACTivation functions
+#ifndef LEAKY_RELU_CONST
+#define LEAKY_RELU_CONST 0.01f
+#endif
+
+static inline float ACT_linearf(float input) {
+  return input;
+}
+
+static inline float ACT_reluf(float input) {
+  return (input < 0.f) ? 0.f : input;
+}
+
+static inline float ACT_leaky_reluf(float input) {
+  return input * ((input < 0.f) ? LEAKY_RELU_CONST : 1.f);
+}
+
+static inline float ACT_logisticf(float input) {
+  return 1.f / (1.f + expf(-input));
+}
+
+static inline float ACT_tanhf(float input) {
+  return tanhf(input);
+}
+
+// and their derivatives
+static inline float derv_linearf(float input) {
+  return 1.f;
+}
+
+static inline float derv_reluf(float input) {
+  return (input < 0.f) ? 0.f : 1.f;
+}
+
+static inline float derv_leaky_reluf(float input) {
+  return (input < 0.f) ? LEAKY_RELU_CONST : 1.f;
+}
+
+static inline float derv_logisticf(float activated_value) {
+  return activated_value * (1.f - activated_value);
+}
+
+static inline float derv_tanhf(float activated_value) {
+  return 1.f - activated_value * activated_value;
+}
 
 // seeds the state with the seed
 void XS256_seed(XS256_state *s, uint64_t seed) {
