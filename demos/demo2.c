@@ -86,8 +86,17 @@ int main(int argc, char** argv) {
 
   clock_t start_time = clock();
 
+  MLP_train_config config = {
+    .learning_rate = learning_rate,
+    .loss_func = LOSS_MSE,
+    .epochs = epochs,
+    .log_step = 200,
+    .logging_func = log_function
+  };
+
   MLP_train_logged(&mymlp, dataset_inputs, dataset_targets,
-    TOTAL_SAMPLES, epochs, learning_rate, LOSS_MSE, 200, log_function);
+    TOTAL_SAMPLES, &config);
+    
   clock_t end_time = clock();
   printf("Training completed in %.2f seconds.\n", (double)(end_time - start_time) / CLOCKS_PER_SEC);
 

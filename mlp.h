@@ -10,21 +10,9 @@
 // DECLARATIONS SECTION
 // ====================
 
-// XOSHIRO256** implementation
 typedef struct {
   uint64_t s[4];
 } XS256_state;
-
-static inline uint64_t rotl_u64(const uint64_t x, int k) {
-  return (x << k) | (x >> (64 - k));
-}
-
-static inline uint64_t XS256_splitmix64(uint64_t *sm_state) {
-  uint64_t z = (*sm_state += UINT64_C(0x9e3779b97f4a7c15));
-  z = (z ^ (z >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
-  z = (z ^ (z >> 27)) * UINT64_C(0x94d049bb133111eb);
-  return z ^ (z >> 31);
-}
 
 // seeds the state with the seed
 void XS256_seed(XS256_state *s, uint64_t seed);
@@ -99,6 +87,15 @@ typedef struct {
   Activation output_layer_activation;
 } MLP;
 
+// training configuration struct
+typedef struct {
+  float learning_rate;
+  Loss_func loss_func;
+  size_t epochs;
+  size_t log_step;
+  void (*logging_func)(MLP* nn, size_t epoch_num, float avg_loss);
+} MLP_train_config;
+
 MLPE_CODE MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activation output_act);
 MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, XS256_state* randstate);
 void MLP_free(MLP* input);
@@ -107,23 +104,17 @@ MLPE_CODE MLP_get_outputs(MLP* mlp, float* dest);
 MLPE_CODE MLP_evaluate(MLP* mlp);
 MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func);
 MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate);
-MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], float learning_rate, Loss_func loss_func);
+MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], const MLP_train_config* config);
 MLPE_CODE MLP_train(MLP* mlp,
               float** dataset_inputs,
               float** dataset_targets,
               size_t num_samples,
-              size_t epochs,
-              float learning_rate,
-              Loss_func loss_func);
+              const MLP_train_config* config);
 MLPE_CODE MLP_train_logged(MLP* mlp,
               float** dataset_inputs,
               float** dataset_targets,
               size_t num_samples,
-              size_t epochs,
-              float learning_rate,
-              Loss_func loss_func,
-              size_t log_step,
-              void (*logging_func)(MLP* nn, size_t epoch_num, float avg_loss));
+              const MLP_train_config* config);
 MLPE_CODE MLP_save(const MLP* mlp, const char* filename);
 MLPE_CODE MLP_load(MLP* mlp, const char* filename);
 
@@ -177,6 +168,17 @@ static inline float derv_logisticf(float activated_value) {
 
 static inline float derv_tanhf(float activated_value) {
   return 1.f - activated_value * activated_value;
+}
+
+static inline uint64_t rotl_u64(const uint64_t x, int k) {
+  return (x << k) | (x >> (64 - k));
+}
+
+static inline uint64_t XS256_splitmix64(uint64_t *sm_state) {
+  uint64_t z = (*sm_state += UINT64_C(0x9e3779b97f4a7c15));
+  z = (z ^ (z >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+  z = (z ^ (z >> 27)) * UINT64_C(0x94d049bb133111eb);
+  return z ^ (z >> 31);
 }
 
 // seeds the state with the seed
@@ -554,18 +556,18 @@ MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate) {
   return MLPE_SUCCESS;
 }
 
-MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], float learning_rate, Loss_func loss_func) {
-  if (!mlp || !inputs || !targets) return MLPE_NULL_PTR;
+MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], const MLP_train_config* config) {
+  if (!mlp || !inputs || !targets || !config) return MLPE_NULL_PTR;
   MLPE_CODE ecode = MLP_set_inputs(mlp, inputs);
   if (ecode) return ecode;
 
   ecode = MLP_evaluate(mlp);
   if (ecode) return ecode;
 
-  ecode = MLP_backpropagate(mlp, targets, loss_func);
+  ecode = MLP_backpropagate(mlp, targets, config->loss_func);
   if (ecode) return ecode;
 
-  ecode = MLP_update_weights(mlp, learning_rate);
+  ecode = MLP_update_weights(mlp, config->learning_rate);
   if (ecode) return ecode;
 
   return MLPE_SUCCESS;
@@ -575,15 +577,13 @@ MLPE_CODE MLP_train(MLP* mlp,
               float** dataset_inputs,
               float** dataset_targets,
               size_t num_samples,
-              size_t epochs,
-              float learning_rate,
-              Loss_func loss_func) {
-  if (!mlp || !dataset_inputs || !dataset_targets || !*dataset_inputs || !*dataset_targets) return MLPE_NULL_PTR;
+              const MLP_train_config* config) {
+  if (!mlp || !dataset_inputs || !dataset_targets || !*dataset_inputs || !*dataset_targets || !config) return MLPE_NULL_PTR;
 
   MLPE_CODE ecode = MLPE_SUCCESS;
-  for (size_t epoch = 0; epoch < epochs; ++epoch) {
+  for (size_t epoch = 0; epoch < config->epochs; ++epoch) {
     for (size_t i = 0; i < num_samples; ++i) {
-      ecode = MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], learning_rate, loss_func);
+      ecode = MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], config);
       if (ecode) return ecode;
     }
   }
@@ -595,20 +595,18 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
               float** dataset_inputs,
               float** dataset_targets,
               size_t num_samples,
-              size_t epochs,
-              float learning_rate,
-              Loss_func loss_func,
-              size_t log_step,
-              void (*logging_func)(MLP* nn, size_t epoch_num, float avg_loss)) {
-  if (!mlp || !dataset_inputs || !dataset_targets || !*dataset_inputs || !*dataset_targets || !logging_func) return MLPE_NULL_PTR;
+              const MLP_train_config* config) {
+  if (!mlp || !dataset_inputs || !dataset_targets || !*dataset_inputs || !*dataset_targets || !config || !config->logging_func) return MLPE_NULL_PTR;
 
   size_t output_size = mlp->topo.layer_sizes[mlp->topo.num_layers - 1];
   float* output = (float*)malloc(output_size * sizeof(float));
   if (!output) return MLPE_MALLOC;
 
-  for (size_t epoch = 0; epoch < epochs; ++epoch) {
+  size_t log_step = (config->log_step == 0) ? 1 : config->log_step;
+
+  for (size_t epoch = 0; epoch < config->epochs; ++epoch) {
     for (size_t i = 0; i < num_samples; ++i) {
-      MLPE_CODE ecode = MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], learning_rate, loss_func);
+      MLPE_CODE ecode = MLP_train_step(mlp, dataset_inputs[i], dataset_targets[i], config);
       if (ecode) return ecode;
     }
 
@@ -625,10 +623,10 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
         for (size_t j = 0; j < output_size; ++j) {
           float a = output[j];
           float t = dataset_targets[i][j];
-          if (loss_func == LOSS_MSE || loss_func == LOSS_ASE) {
+          if (config->loss_func == LOSS_MSE || config->loss_func == LOSS_ASE) {
             float diff = a - t;
             total_loss += diff * diff;
-          } else if (loss_func == LOSS_binary_cross_entropy) {
+          } else if (config->loss_func == LOSS_binary_cross_entropy) {
             float eps = 1e-15f;
             float clamped_a = fmaxf(eps, fminf(1.f - eps, a));
             total_loss -= (t * logf(clamped_a) + (1.f - t) * logf(1.f - clamped_a));
@@ -636,7 +634,7 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
         }
       }
       float avg_loss = total_loss / (float)num_samples;
-      logging_func(mlp, epoch, avg_loss);
+      config->logging_func(mlp, epoch, avg_loss);
     }
   }
   free(output);

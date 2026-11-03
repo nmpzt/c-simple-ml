@@ -33,7 +33,15 @@ int main(void) {
     (float[]) {0.f},
   };
 
-  MLP_train(&mymlp, (float**) learning_inputs, (float**) learning_targets, 4, 65536, 0.1f, LOSS_MSE);
+  MLP_train_config config = {
+    .learning_rate = 0.1f,
+    .loss_func = LOSS_MSE,
+    .epochs = 65536,
+    .log_step = 0,
+    .logging_func = NULL
+  };
+
+  MLP_train(&mymlp, (float**) learning_inputs, (float**) learning_targets, 4, &config);
 
   float output[1];
   for (int i = 0; i < 4; ++i) {
