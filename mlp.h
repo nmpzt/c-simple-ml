@@ -79,7 +79,7 @@ typedef struct {
   float*  weights_deltas;
   float*  biases_deltas;
 
-  float*  memory_pool; // all the data live here
+  float*  memory_pool; // all the data lives here
 
   Topology topo;
 
@@ -213,6 +213,7 @@ uint64_t XS256_rand(XS256_state *s) {
 static float random_normal(XS256_state* s) {
   static const float factor = 1.f / ((float)UINT64_MAX + 1.f);
   float u1, u2;
+  // if we encounter 0.f, try again because logf(0.f) is a bad number
   do {
     u1 = (float)XS256_rand(s) * factor;
   } while (u1 <= 0.0f || u1 >= 1.0f);
@@ -314,6 +315,8 @@ MLPE_CODE MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activ
 
   return MLPE_SUCCESS;
 }
+
+// these are row-major btw
 
 static inline size_t weights_index(size_t layer, size_t target, size_t source, const Topology* topo) {
   return topo->weight_offsets[layer] + (source * topo->layer_sizes[layer + 1] + target);
@@ -628,7 +631,7 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
             total_loss += diff * diff;
           } else if (config->loss_func == LOSS_binary_cross_entropy) {
             float eps = 1e-15f;
-            float clamped_a = fmaxf(eps, fminf(1.f - eps, a));
+            float clamped_a = fmaxf(eps, fminf(1.f - eps, a)); // to prevent logf(0.f)
             total_loss -= (t * logf(clamped_a) + (1.f - t) * logf(1.f - clamped_a));
           }
         }
@@ -641,6 +644,16 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
 
   return MLPE_SUCCESS;
 }
+
+/**
+ * The save and load functions use this following strict binary layout order:
+ * 1. num_layers              - uint16_t
+ * 2. hidden_layer_activation - Activation
+ * 3. output_layer_activation - Activation
+ * 4. layer_sizes             - Activation     [num_layers]
+ * 5. weights                 - uint16_t array [weights_size]
+ * 6. biases                  - float array    [all_size]
+ */
 
 MLPE_CODE MLP_save(const MLP* mlp, const char* filename) {
   if (!mlp || !filename) return MLPE_NULL_PTR;

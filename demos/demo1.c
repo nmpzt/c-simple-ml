@@ -25,6 +25,8 @@ int main(void) {
     printf("%g\n", output[0]);
   }
 
+  MLP_free(&mynn);
+
   return 0;
 }
 

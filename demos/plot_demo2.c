@@ -50,5 +50,6 @@ int main(void) {
   fclose(f);
   MLP_free(&mymlp);
   puts("Done");
+
   return 0;
 }
