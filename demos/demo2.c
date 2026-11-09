@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define STB_LEAKCHECK_IMPLEMENTATION
+#include "include/stb_leakcheck.h"
+
 #define MLP_H_IMPLEMENTATION
 #include "../mlp.h"
 
@@ -111,6 +114,8 @@ int main(int argc, char** argv) {
   MLP_free(&mymlp);
   free_dataset(dataset_inputs, dataset_targets);
   puts("Done.");
+
+  stb_leakcheck_dumpmem();
 
   return 0;
 }

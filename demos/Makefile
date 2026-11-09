@@ -11,6 +11,6 @@ all: $(PROGS)
 	$(CC) $(CFLAGS) $< -o $@ -lm -Wall
 
 clean:
-	rm -f $(PROGS) *.exe
+	rm -f *.o *.obj *.exe *.out app demo
 	rm *.ppm
 	rm ./models/*.bin

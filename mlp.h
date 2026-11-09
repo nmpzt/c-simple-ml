@@ -332,23 +332,20 @@ MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, XS256_s
   Topology* topo = &(input->topo);
 
   size_t all_size = 0;
-  for (uint16_t i = 0; i < topo->num_layers; ++i) {
+  for (uint16_t i = 0; i < topo->num_layers; ++i)
     all_size += topo->layer_sizes[i];
-  }
-  for (size_t i = 0; i < all_size; ++i) {
+  for (size_t i = 0; i < all_size; ++i)
     input->biases[i] = 0.0f;
-  }
 
   size_t weights_size = 0;
-  for (uint16_t i = 0; i < topo->num_layers - 1; ++i) {
+  for (uint16_t i = 0; i < topo->num_layers - 1; ++i)
     weights_size += (size_t)topo->layer_sizes[i] * topo->layer_sizes[i + 1];
-  }
 
   if (initialisation_method == INIT_zero) {
-    for (size_t i = 0; i < weights_size; ++i) {
+    for (size_t i = 0; i < weights_size; ++i)
       input->weights[i] = 0.0f;
-    }
-  } 
+  }
+
   else if (initialisation_method == INIT_Xavier) {
     for (uint16_t l = 0; l < topo->num_layers - 1; ++l) {
       float n_in  = (float)topo->layer_sizes[l];

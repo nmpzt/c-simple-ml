@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define STB_LEAKCHECK_IMPLEMENTATION
+#include "include/stb_leakcheck.h"
+
 #define MLP_H_IMPLEMENTATION
 #include "../mlp.h"
 
@@ -50,6 +53,8 @@ int main(void) {
   fclose(f);
   MLP_free(&mymlp);
   puts("Done");
+
+  stb_leakcheck_dumpmem();
 
   return 0;
 }

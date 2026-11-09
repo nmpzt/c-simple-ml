@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <assert.h>
 
+#define STB_LEAKCHECK_IMPLEMENTATION
+#include "include/stb_leakcheck.h"
+
 #define MLP_H_IMPLEMENTATION
 #include "../mlp.h"
 
@@ -54,6 +57,8 @@ int main(void) {
   assert(!MLP_save(&mymlp, "models/xor_model.bin"));
 
   MLP_free(&mymlp);
+
+  stb_leakcheck_dumpmem();
 
   return 0;
 }
