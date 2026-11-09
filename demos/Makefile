@@ -8,7 +8,7 @@ PROGS = $(SRCS:.c=)
 all: $(PROGS)
 
 %: %.c
-	$(CC) $(CFLAGS) $< -o $@ -lm
+	$(CC) $(CFLAGS) $< -o $@ -lm -Wall
 
 clean:
 	rm -f $(PROGS) *.exe

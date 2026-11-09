@@ -1,4 +1,6 @@
 // demo2.c classifying spirals
+// This demo is cool but...
+// Badly written
 
 #include <assert.h>
 #include <stdio.h>
@@ -11,14 +13,9 @@
 #define NUM_SAMPLES_PER_CLASS 250
 #define TOTAL_SAMPLES (2 * NUM_SAMPLES_PER_CLASS)
 
-void generate_spiral_dataset(float*** out_inputs, float*** out_targets, XS256_state* rng) {
-  float** inputs = (float**)malloc(TOTAL_SAMPLES * sizeof(float*));
-  float** targets = (float**)malloc(TOTAL_SAMPLES * sizeof(float*));
-
-  for (int i = 0; i < TOTAL_SAMPLES; ++i) {
-    inputs[i] = (float*)malloc(2 * sizeof(float));
-    targets[i] = (float*)malloc(1 * sizeof(float));
-  }
+void generate_spiral_dataset(float** out_inputs, float** out_targets, XS256_state* rng) {
+  float* inputs = (float*)malloc(TOTAL_SAMPLES * 2 * sizeof(float));
+  float* targets = (float*)malloc(TOTAL_SAMPLES * 1 * sizeof(float));
 
   for (int class_idx = 0; class_idx < 2; ++class_idx) {
     for (int i = 0; i < NUM_SAMPLES_PER_CLASS; ++i) {
@@ -26,7 +23,6 @@ void generate_spiral_dataset(float*** out_inputs, float*** out_targets, XS256_st
       float r = (float)i / (float)NUM_SAMPLES_PER_CLASS * 1.5f;
       float t = (float)i / (float)NUM_SAMPLES_PER_CLASS * 2.5f * PI_F + (class_idx * PI_F);
       
-      // add noise using xoshiro or standard rand; let's use xoshiro-derived values via a uniform factor
       float factor = 1.f / ((float)UINT64_MAX + 2.f);
       float u1 = ((float)XS256_rand(rng) + 1.f) * factor;
       float u2 = ((float)XS256_rand(rng) + 1.f) * factor;
@@ -34,9 +30,9 @@ void generate_spiral_dataset(float*** out_inputs, float*** out_targets, XS256_st
       float noise_x = (u1 - 0.5f) * 0.1f;
       float noise_y = (u2 - 0.5f) * 0.1f;
 
-      inputs[idx][0] = r * sinf(t) + noise_x;
-      inputs[idx][1] = r * cosf(t) + noise_y;
-      targets[idx][0] = (float)class_idx;
+      inputs[idx * 2 + 0] = r * sinf(t) + noise_x;
+      inputs[idx * 2 + 1] = r * cosf(t) + noise_y;
+      targets[idx] = (float)class_idx;
     }
   }
 
@@ -44,11 +40,7 @@ void generate_spiral_dataset(float*** out_inputs, float*** out_targets, XS256_st
   *out_targets = targets;
 }
 
-void free_dataset(float** inputs, float** targets) {
-  for (int i = 0; i < TOTAL_SAMPLES; ++i) {
-    free(inputs[i]);
-    free(targets[i]);
-  }
+void free_dataset(float* inputs, float* targets) {
   free(inputs);
   free(targets);
 }
@@ -68,8 +60,8 @@ int main(int argc, char** argv) {
   XS256_state rng;
   XS256_seed(&rng, seed);
 
-  float** dataset_inputs = NULL;
-  float** dataset_targets = NULL;
+  float* dataset_inputs = NULL;
+  float* dataset_targets = NULL;
   generate_spiral_dataset(&dataset_inputs, &dataset_targets, &rng);
 
   Topology mytopo;
@@ -103,11 +95,11 @@ int main(int argc, char** argv) {
   int correct = 0;
   float output[1];
   for (int i = 0; i < TOTAL_SAMPLES; ++i) {
-      MLP_set_inputs(&mymlp, dataset_inputs[i]);
+      MLP_set_inputs(&mymlp, dataset_inputs + i * 2);
       MLP_evaluate(&mymlp);
       MLP_get_outputs(&mymlp, output);
       int predicted_class = (output[0] >= 0.5f) ? 1 : 0;
-      if ((float)predicted_class == dataset_targets[i][0]) {
+      if ((float)predicted_class == dataset_targets[i]) {
           correct++;
       }
   }

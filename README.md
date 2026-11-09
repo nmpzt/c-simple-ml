@@ -73,8 +73,8 @@ The library uses the **Xoshiro256** (Xoshiro256starstar) pseudo-random number ge
 - `MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)`: Computes gradients via backpropagation for a single training sample.
 - `MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate)`: Applies gradient descent to update weights and biases.
 - `MLPE_CODE MLP_train_step(MLP* mlp, float inputs[], float targets[], const MLP_train_config* config)`: Runs a single forward pass, backpropagation, and weight update using a training configuration.
-- `MLPE_CODE MLP_train(MLP* mlp, float** dataset_inputs, float** dataset_targets, size_t num_samples, const MLP_train_config* config)`: Standard batch training loop across multiple epochs using a training configuration.
-- `MLPE_CODE MLP_train_logged(MLP* mlp, float** dataset_inputs, float** dataset_targets, size_t num_samples, const MLP_train_config* config)`: Training loop with periodic loss evaluation and logging callback support specified in the configuration.
+- `MLPE_CODE MLP_train(MLP* mlp, float dataset_inputs[], float dataset_targets[], size_t num_samples, const MLP_train_config* config)`: Standard batch training loop across multiple epochs using a training configuration.
+- `MLPE_CODE MLP_train_logged(MLP* mlp, float dataset_inputs[], float dataset_targets[], size_t num_samples, const MLP_train_config* config)`: Training loop with periodic loss evaluation and logging callback support specified in the configuration.
 
 ### Saving & Loading
 
@@ -95,4 +95,3 @@ These are found in the `demos` folder. Navigate to it and just run the makefile,
 - Doesn't output to a more universal format, just unreadable binary files: I really don't know of a universal multilayer perceptron file format.
 - Because of the reason above, it's kinda hard to test it.
 - Because it's single-header, it's kinda trying to do too many things. Too many here probably means two or three here but you do get the point.
-- There should probably be new demos, the ones here have barely changed since the initial commit. But well, there aren't really new features anyway. But maybe I should write better demos, the ones here aren't compiled with `-Wall` for a reason, and it's not a good reason.

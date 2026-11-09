@@ -19,18 +19,18 @@ int main(void) {
 
   MLP_populate(&mymlp, INIT_Xavier, &rng);
 
-  float* learning_inputs[] = {
-    (float[]) {0.f, 0.f},
-    (float[]) {1.f, 0.f},
-    (float[]) {0.f, 1.f},
-    (float[]) {1.f, 1.f},
+  float learning_inputs[] = {
+    0.f, 0.f,
+    1.f, 0.f,
+    0.f, 1.f,
+    1.f, 1.f,
   };
 
-  float* learning_targets[] = {
-    (float[]) {0.f},
-    (float[]) {1.f},
-    (float[]) {1.f},
-    (float[]) {0.f},
+  float learning_targets[] = {
+    0.f,
+    1.f,
+    1.f,
+    0.f,
   };
 
   MLP_train_config config = {
@@ -41,14 +41,14 @@ int main(void) {
     .logging_func = NULL
   };
 
-  MLP_train(&mymlp, (float**) learning_inputs, (float**) learning_targets, 4, &config);
+  MLP_train(&mymlp, learning_inputs, learning_targets, 4, &config);
 
   float output[1];
   for (int i = 0; i < 4; ++i) {
-    MLP_set_inputs(&mymlp, learning_inputs[i]);
+    MLP_set_inputs(&mymlp, learning_inputs + 2*i);
     MLP_evaluate(&mymlp);
     MLP_get_outputs(&mymlp, output);
-    printf("{%g, %g} => %g\n", learning_inputs[i][0], learning_inputs[i][1], output[0]);
+    printf("{%g, %g} => %g\n", learning_inputs[2*i], learning_inputs[1 + 2*i], output[0]);
   }
 
   assert(!MLP_save(&mymlp, "models/xor_model.bin"));
