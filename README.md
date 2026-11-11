@@ -54,16 +54,11 @@ The library uses the **Xoshiro256** (Xoshiro256starstar) pseudo-random number ge
 
 ## API Reference
 
-### Topology Management
-
-- `MLPE_CODE Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons)`: Initializes the network structure and caches weight/value offsets.
-- `MLPE_CODE Topology_free(Topology* topo)`: Frees topology memory.
-
 ### Network Lifecycle
 
-- `MLPE_CODE MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activation output_act)`: Allocates memory using a single contiguous memory pool for weights, biases, values, and gradient deltas.
+- `MLPE_CODE MLP_initialise(MLP* input, uint16_t layers, const uint16_t* neurons, Activation hidden_act, Activation output_act)`: Allocates memory using a single contiguous memory pool for weights, biases, values, and gradient deltas. `neurons` holds the size of each layer (input first, output last) and is copied. `layers` must be at least 2.
 - `MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, XS256_state* randstate)`: Populates weights using the specified initialization method and a pointer to an initialized Xoshiro256 state.
-- `MLPE_CODE MLP_free(MLP* input)`: Frees all memory associated with the network pool and its topology.
+- `MLPE_CODE MLP_free(MLP* input)`: Frees all memory associated with the network.
 
 ### Execution & Training
 
@@ -79,7 +74,7 @@ The library uses the **Xoshiro256** (Xoshiro256starstar) pseudo-random number ge
 ### Saving & Loading
 
 - `MLPE_CODE MLP_save(const MLP* mlp, const char* filename)`: Saves a network to disk.
-- `MLPE_CODE MLP_load(MLP* mlp, const char* filename)`: Restores a network from a binary model file. This also automatically allocates the memory and topology for the network.
+- `MLPE_CODE MLP_load(MLP* mlp, const char* filename)`: Restores a network from a binary model file. This also automatically allocates the memory for the network.
 
 ## Demos
 

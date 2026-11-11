@@ -67,11 +67,8 @@ int main(int argc, char** argv) {
   float* dataset_targets = NULL;
   generate_spiral_dataset(&dataset_inputs, &dataset_targets, &rng);
 
-  Topology mytopo;
-  Topology_init(&mytopo, 4, (uint16_t[]) {2, 16, 16, 1});
-
   MLP mymlp;
-  MLP_initialise(&mymlp, mytopo, ACT_tanh, ACT_logistic);
+  MLP_initialise(&mymlp, 4, (uint16_t[]) {2, 16, 16, 1}, ACT_tanh, ACT_logistic);
 
   MLP_populate(&mymlp, INIT_He, &rng);
 

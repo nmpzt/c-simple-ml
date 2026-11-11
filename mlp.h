@@ -57,31 +57,27 @@ typedef enum {
   LOSS_binary_cross_entropy,
 } Loss_func;
 
-// topology
-typedef struct {
-  uint16_t  num_layers;
-  uint16_t* layer_sizes;
-  size_t*   weight_offsets; // cached start index of weights for each layer
-  size_t*   val_offsets;    // cached start index of biases/values for each layer
-} Topology;
-
-MLPE_CODE Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons);
-MLPE_CODE Topology_free(Topology* topo);
-
 // neural network
 typedef struct {
-  float*  weights;
-  float*  biases;
-  float*  values;    // ACTivated values a
-  float*  raw_sums;    // z for backprop
+  // topology
+  uint16_t  num_layers     ;
+  uint16_t* layer_sizes    ;
 
-  float*  values_deltas;
-  float*  weights_deltas;
-  float*  biases_deltas;
+  size_t*   weight_offsets ; // cached start index of weights for each layer
+  size_t*   val_offsets    ; // cached start index of biases/values for each layer
+  size_t    weights_size   ; // total number of weights
+  size_t    all_size       ; // total number of neurons (biases/values)
 
-  float*  memory_pool; // all the data lives here
+  float*  weights          ;
+  float*  biases           ;
+  float*  values           ; // activated values a
+  float*  raw_sums         ; // z for backprop
 
-  Topology topo;
+  float*  values_deltas    ;
+  float*  weights_deltas   ;
+  float*  biases_deltas    ;
+
+  float*  memory_pool      ; // all the float data lives here
 
   Activation hidden_layer_activation;
   Activation output_layer_activation;
@@ -96,9 +92,9 @@ typedef struct {
   void (*logging_func)(MLP* nn, size_t epoch_num, float avg_loss);
 } MLP_train_config;
 
-MLPE_CODE MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activation output_act);
+MLPE_CODE MLP_initialise(MLP* input, uint16_t layers, const uint16_t* neurons, Activation hidden_act, Activation output_act);
 MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, XS256_state* randstate);
-void MLP_free(MLP* input);
+MLPE_CODE MLP_free(MLP* input);
 MLPE_CODE MLP_set_inputs(MLP* mlp, float values[]);
 MLPE_CODE MLP_get_outputs(MLP* mlp, float* dest);
 MLPE_CODE MLP_evaluate(MLP* mlp);
@@ -124,7 +120,7 @@ MLPE_CODE MLP_load(MLP* mlp, const char* filename);
 
 #ifdef MLP_H_IMPLEMENTATION
 
-// ACTivation functions
+// activation functions
 #ifndef LEAKY_RELU_CONST
 #define LEAKY_RELU_CONST 0.01f
 #endif
@@ -150,6 +146,7 @@ static inline float ACT_tanhf(float input) {
 }
 
 // and their derivatives
+
 static inline float derv_linearf(float input) {
   return 1.f;
 }
@@ -223,151 +220,120 @@ static float random_normal(XS256_state* s) {
   return sqrtf(-2.f * logf(u1)) * cosf(PI2_F * u2);
 }
 
-MLPE_CODE Topology_init(Topology* topo, uint16_t layers, uint16_t* neurons) {
-  if (!topo || !neurons) return MLPE_NULL_PTR;
+MLPE_CODE MLP_initialise(MLP* input, uint16_t layers, const uint16_t* neurons, Activation hidden_act, Activation output_act) {
+  if (!input || !neurons) return MLPE_NULL_PTR;
+  if (layers < 2) return MLPE_WHAT;
 
-  topo->num_layers = layers;
-  topo->layer_sizes = NULL;
-  topo->weight_offsets = NULL;
-  topo->val_offsets = NULL;
-  
-  topo->layer_sizes = (uint16_t*) malloc(layers * sizeof(uint16_t));
-  if (!topo->layer_sizes) goto cleanup;
+  input->num_layers = layers;
+  input->hidden_layer_activation = hidden_act;
+  input->output_layer_activation = output_act;
 
-  topo->weight_offsets = (size_t*) malloc(layers * sizeof(size_t));
-  if (!topo->weight_offsets) goto cleanup;
+  input->layer_sizes = NULL;
+  input->weight_offsets = NULL;
+  input->val_offsets = NULL;
+  input->memory_pool = NULL;
 
-  topo->val_offsets = (size_t*) malloc(layers * sizeof(size_t));
-  if (!topo->val_offsets) goto cleanup;
+  input->layer_sizes = (uint16_t*) malloc(layers * sizeof(uint16_t));
+  if (!input->layer_sizes) goto cleanup;
+
+  input->weight_offsets = (size_t*) malloc(layers * sizeof(size_t));
+  if (!input->weight_offsets) goto cleanup;
+
+  input->val_offsets = (size_t*) malloc(layers * sizeof(size_t));
+  if (!input->val_offsets) goto cleanup;
 
   size_t w_acc = 0;
   size_t v_acc = 0;
 
   for (uint16_t i = 0; i < layers; ++i) {
-    topo->layer_sizes[i] = neurons[i];
+    input->layer_sizes[i] = neurons[i];
 
-    topo->weight_offsets[i] = w_acc;
+    input->weight_offsets[i] = w_acc;
     if (i < layers - 1) {
       w_acc += (size_t)neurons[i] * neurons[i + 1];
     }
 
-    topo->val_offsets[i] = v_acc;
+    input->val_offsets[i] = v_acc;
     v_acc += neurons[i];
   }
+
+  input->weights_size = w_acc;
+  input->all_size = v_acc;
+
+  size_t total_floats = (2 * w_acc) + (5 * v_acc);
+  input->memory_pool = (float*) malloc(total_floats * sizeof(float));
+  if (!input->memory_pool) goto cleanup;
+
+  input->weights        = input->memory_pool;
+  input->weights_deltas = input->weights        + w_acc;
+  input->biases         = input->weights_deltas + w_acc;
+  input->values         = input->biases         + v_acc;
+  input->raw_sums       = input->values         + v_acc;
+  input->values_deltas  = input->raw_sums       + v_acc;
+  input->biases_deltas  = input->values_deltas  + v_acc;
 
   return MLPE_SUCCESS;
 
 cleanup:
-  free(topo->layer_sizes);
-  free(topo->weight_offsets);
-  free(topo->val_offsets);
-  
-  topo->num_layers = 0;
-  topo->layer_sizes = NULL;
-  topo->weight_offsets = NULL;
-  topo->val_offsets = NULL;
-  
+  free(input->layer_sizes);
+  free(input->weight_offsets);
+  free(input->val_offsets);
+  free(input->memory_pool);
+
+  input->num_layers = 0;
+  input->layer_sizes = NULL;
+  input->weight_offsets = NULL;
+  input->val_offsets = NULL;
+  input->memory_pool = NULL;
+  input->weights_size = 0;
+  input->all_size = 0;
+
   return MLPE_MALLOC;
-}
-
-MLPE_CODE Topology_free(Topology* topo) {
-  if (!topo) return MLPE_NULL_PTR;
-
-  topo->num_layers = 0;
-  free(topo->layer_sizes);
-  topo->layer_sizes = NULL;
-  free(topo->weight_offsets);
-  topo->weight_offsets = NULL;
-  free(topo->val_offsets);
-  topo->val_offsets = NULL;
-
-  return MLPE_SUCCESS;
-}
-
-MLPE_CODE MLP_initialise(MLP* input, Topology topo, Activation hidden_act, Activation output_act) {
-  if (!input) return MLPE_NULL_PTR;
-  input->topo = topo;
-  input->hidden_layer_activation = hidden_act;
-  input->output_layer_activation = output_act;
-
-  size_t weights_size = 0;
-  size_t all_size = 0;
-
-  for (uint16_t i = 0; i < topo.num_layers - 1; ++i) {
-    weights_size += (size_t)topo.layer_sizes[i] * topo.layer_sizes[i + 1];
-  }
-
-  for (uint16_t i = 0; i < topo.num_layers; ++i) {
-    all_size += topo.layer_sizes[i];
-  }
-
-  size_t total_floats = (2 * weights_size) + (5 * all_size);
-  input->memory_pool = (float*) malloc(total_floats * sizeof(float));
-  if (!input->memory_pool) return MLPE_MALLOC;
-
-  input->weights        = input->memory_pool;
-  input->weights_deltas = input->weights        + weights_size;
-  input->biases         = input->weights_deltas + weights_size;
-  input->values         = input->biases         + all_size;
-  input->raw_sums       = input->values         + all_size;
-  input->values_deltas  = input->raw_sums       + all_size;
-  input->biases_deltas  = input->values_deltas  + all_size;
-
-  return MLPE_SUCCESS;
 }
 
 // these are row-major btw
 
-static inline size_t weights_index(size_t layer, size_t target, size_t source, const Topology* topo) {
-  return topo->weight_offsets[layer] + (source * topo->layer_sizes[layer + 1] + target);
+static inline size_t weights_index(size_t layer, size_t target, size_t source, const MLP* mlp) {
+  return mlp->weight_offsets[layer] + (source * mlp->layer_sizes[layer + 1] + target);
 }
 
-static inline size_t val_index(size_t layer, size_t ind, const Topology* topo) {
-  return topo->val_offsets[layer] + ind;
+static inline size_t val_index(size_t layer, size_t ind, const MLP* mlp) {
+  return mlp->val_offsets[layer] + ind;
 }
 
 MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, XS256_state* randstate) {
   if (!input) return MLPE_NULL_PTR;
 
-  Topology* topo = &(input->topo);
-
-  size_t all_size = 0;
-  for (uint16_t i = 0; i < topo->num_layers; ++i)
-    all_size += topo->layer_sizes[i];
-  for (size_t i = 0; i < all_size; ++i)
+  for (size_t i = 0; i < input->all_size; ++i)
     input->biases[i] = 0.0f;
 
-  size_t weights_size = 0;
-  for (uint16_t i = 0; i < topo->num_layers - 1; ++i)
-    weights_size += (size_t)topo->layer_sizes[i] * topo->layer_sizes[i + 1];
-
   if (initialisation_method == INIT_zero) {
-    for (size_t i = 0; i < weights_size; ++i)
+    for (size_t i = 0; i < input->weights_size; ++i)
       input->weights[i] = 0.0f;
   }
 
   else if (initialisation_method == INIT_Xavier) {
-    for (uint16_t l = 0; l < topo->num_layers - 1; ++l) {
-      float n_in  = (float)topo->layer_sizes[l];
-      float n_out = (float)topo->layer_sizes[l + 1];
+    for (uint16_t l = 0; l < input->num_layers - 1; ++l) {
+      float n_in  = (float)input->layer_sizes[l];
+      float n_out = (float)input->layer_sizes[l + 1];
       float stddev = sqrtf(2.f / (n_in + n_out));
 
-      for (size_t target = 0; target < topo->layer_sizes[l + 1]; ++target) {
-        for (size_t source = 0; source < topo->layer_sizes[l]; ++source) {
-          size_t idx = weights_index(l, target, source, topo);
+      for (size_t target = 0; target < input->layer_sizes[l + 1]; ++target) {
+        for (size_t source = 0; source < input->layer_sizes[l]; ++source) {
+          size_t idx = weights_index(l, target, source, input);
           input->weights[idx] = random_normal(randstate) * stddev;
         }
       }
     }
   } 
   else if (initialisation_method == INIT_He) {
-    for (uint16_t l = 0; l < topo->num_layers - 1; ++l) {
-      float n_in = (float)topo->layer_sizes[l];
+    for (uint16_t l = 0; l < input->num_layers - 1; ++l) {
+      float n_in = (float)input->layer_sizes[l];
       float stddev = sqrtf(2.f / n_in);
 
-      for (size_t target = 0; target < topo->layer_sizes[l + 1]; ++target) {
-        for (size_t source = 0; source < topo->layer_sizes[l]; ++source) {
-          size_t idx = weights_index(l, target, source, topo);
+      for (size_t target = 0; target < input->layer_sizes[l + 1]; ++target) {
+        for (size_t source = 0; source < input->layer_sizes[l]; ++source) {
+          size_t idx = weights_index(l, target, source, input);
           input->weights[idx] = random_normal(randstate) * stddev;
         }
       }
@@ -377,8 +343,8 @@ MLPE_CODE MLP_populate(MLP* input, Initialisation initialisation_method, XS256_s
   return MLPE_SUCCESS;
 }
 
-void MLP_free(MLP* input) {
-  if (!input) return;
+MLPE_CODE MLP_free(MLP* input) {
+  if (!input) return MLPE_NULL_PTR;
   free(input->memory_pool);
   input->memory_pool = NULL;
   input->weights = NULL;
@@ -389,14 +355,24 @@ void MLP_free(MLP* input) {
   input->values_deltas = NULL;
   input->biases_deltas = NULL;
 
-  Topology_free( &(input->topo) );
+  free(input->layer_sizes);
+  input->layer_sizes = NULL;
+  free(input->weight_offsets);
+  input->weight_offsets = NULL;
+  free(input->val_offsets);
+  input->val_offsets = NULL;
+
+  input->num_layers = 0;
+  input->weights_size = 0;
+  input->all_size = 0;
+  return MLPE_SUCCESS;
 }
 
 MLPE_CODE MLP_set_inputs(MLP* mlp, float values[]) {
   if (!mlp) return MLPE_NULL_PTR;
-  uint16_t firstlayer_size = mlp->topo.layer_sizes[0];
+  uint16_t firstlayer_size = mlp->layer_sizes[0];
   for (uint16_t i = 0; i < firstlayer_size; ++i) {
-    mlp->values[val_index(0, i,  &(mlp->topo) )] = values[i];
+    mlp->values[val_index(0, i, mlp)] = values[i];
   }
 
   return MLPE_SUCCESS;
@@ -404,11 +380,11 @@ MLPE_CODE MLP_set_inputs(MLP* mlp, float values[]) {
 
 MLPE_CODE MLP_get_outputs(MLP* mlp, float* dest) {
   if (!mlp) return MLPE_NULL_PTR;
-  const size_t last_layer_index = mlp->topo.num_layers - 1;
-  const size_t last_layer_size = mlp->topo.layer_sizes[last_layer_index];
+  const size_t last_layer_index = mlp->num_layers - 1;
+  const size_t last_layer_size = mlp->layer_sizes[last_layer_index];
 
   for (size_t i = 0; i < last_layer_size; ++i) {
-    dest[i] = mlp->values[val_index(last_layer_index, i, &(mlp->topo) )];
+    dest[i] = mlp->values[val_index(last_layer_index, i, mlp)];
   }
 
   return MLPE_SUCCESS;
@@ -427,21 +403,20 @@ static float apply_activation(Activation act, float input) {
 
 MLPE_CODE MLP_evaluate(MLP* mlp) {
   if (!mlp) return MLPE_NULL_PTR;
-  const Topology* topo = &(mlp->topo);
 
-  for (uint16_t l = 0; l < topo->num_layers - 1; ++l) {
-    uint16_t current_size = topo->layer_sizes[l];
-    uint16_t next_size = topo->layer_sizes[l + 1];
-    Activation act = (l == topo->num_layers - 2) ? mlp->output_layer_activation 
-                                                 : mlp->hidden_layer_activation;
+  for (uint16_t l = 0; l < mlp->num_layers - 1; ++l) {
+    uint16_t current_size = mlp->layer_sizes[l];
+    uint16_t next_size = mlp->layer_sizes[l + 1];
+    Activation act = (l == mlp->num_layers - 2) ? mlp->output_layer_activation 
+                                                : mlp->hidden_layer_activation;
 
     for (size_t j = 0; j < next_size; ++j) {
-      size_t next_v_idx = val_index(l + 1, j, topo);
+      size_t next_v_idx = val_index(l + 1, j, mlp);
       mlp->raw_sums[next_v_idx] = mlp->biases[next_v_idx];
       
       for (size_t i = 0; i < current_size; ++i) {
-          size_t curr_v_idx = val_index(l, i, topo);
-          size_t w_idx = weights_index(l, j, i, topo);
+          size_t curr_v_idx = val_index(l, i, mlp);
+          size_t w_idx = weights_index(l, j, i, mlp);
           
           mlp->raw_sums[next_v_idx] += mlp->weights[w_idx] * mlp->values[curr_v_idx];
       }
@@ -466,12 +441,11 @@ static float apply_activation_derivative(Activation act, float activated_val) {
 
 MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func) {
   if (!mlp || !targets) return MLPE_NULL_PTR;
-  const Topology* topo = &(mlp->topo);
-  uint16_t L = topo->num_layers - 1;
-  size_t output_size = topo->layer_sizes[L];
+  uint16_t L = mlp->num_layers - 1;
+  size_t output_size = mlp->layer_sizes[L];
 
   for (size_t j = 0; j < output_size; ++j) {
-    size_t v_idx = val_index(L, j, topo);
+    size_t v_idx = val_index(L, j, mlp);
     float a = mlp->values[v_idx];
     float t = targets[j];
     float derivative = apply_activation_derivative(mlp->output_layer_activation, a);
@@ -489,16 +463,16 @@ MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)
   }
 
   for (int16_t l = (int16_t)L - 1; l >= 0; --l) {
-    uint16_t curr_size = topo->layer_sizes[l];
-    uint16_t next_size = topo->layer_sizes[l + 1];
+    uint16_t curr_size = mlp->layer_sizes[l];
+    uint16_t next_size = mlp->layer_sizes[l + 1];
 
     for (size_t i = 0; i < curr_size; ++i) {
-      size_t curr_v_idx = val_index(l, i, topo);
+      size_t curr_v_idx = val_index(l, i, mlp);
       float error_sum = 0.0f;
 
       for (size_t j = 0; j < next_size; ++j) {
-        size_t next_v_idx = val_index(l + 1, j, topo);
-        size_t w_idx = weights_index(l, j, i, topo);
+        size_t next_v_idx = val_index(l + 1, j, mlp);
+        size_t w_idx = weights_index(l, j, i, mlp);
         error_sum += mlp->weights[w_idx] * mlp->values_deltas[next_v_idx];
       }
 
@@ -509,19 +483,19 @@ MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)
     }
   }
 
-  for (uint16_t l = 0; l < topo->num_layers - 1; ++l) {
-    uint16_t curr_size = topo->layer_sizes[l];
-    uint16_t next_size = topo->layer_sizes[l + 1];
+  for (uint16_t l = 0; l < mlp->num_layers - 1; ++l) {
+    uint16_t curr_size = mlp->layer_sizes[l];
+    uint16_t next_size = mlp->layer_sizes[l + 1];
 
     for (size_t j = 0; j < next_size; ++j) {
-      size_t next_v_idx = val_index(l + 1, j, topo);
+      size_t next_v_idx = val_index(l + 1, j, mlp);
       float next_delta = mlp->values_deltas[next_v_idx];
 
       mlp->biases_deltas[next_v_idx] = next_delta;
 
       for (size_t i = 0; i < curr_size; ++i) {
-        size_t curr_v_idx = val_index(l, i, topo);
-        size_t w_idx = weights_index(l, j, i, topo);
+        size_t curr_v_idx = val_index(l, i, mlp);
+        size_t w_idx = weights_index(l, j, i, mlp);
         
         mlp->weights_deltas[w_idx] = next_delta * mlp->values[curr_v_idx];
       }
@@ -533,23 +507,12 @@ MLPE_CODE MLP_backpropagate(MLP* mlp, const float* targets, Loss_func loss_func)
 
 MLPE_CODE MLP_update_weights(MLP* mlp, float learning_rate) {
   if (!mlp) return MLPE_NULL_PTR;
-  const Topology* topo = &(mlp->topo);
 
-  size_t weights_size = 0;
-  for (uint16_t i = 0; i < topo->num_layers - 1; ++i) {
-    weights_size += (size_t)topo->layer_sizes[i] * topo->layer_sizes[i + 1];
-  }
-
-  for (size_t i = 0; i < weights_size; ++i) {
+  for (size_t i = 0; i < mlp->weights_size; ++i) {
     mlp->weights[i] -= learning_rate * mlp->weights_deltas[i];
   }
 
-  size_t all_size = 0;
-  for (uint16_t i = 0; i < topo->num_layers; ++i) {
-    all_size += topo->layer_sizes[i];
-  }
-
-  for (size_t i = 0; i < all_size; ++i) {
+  for (size_t i = 0; i < mlp->all_size; ++i) {
     mlp->biases[i] -= learning_rate * mlp->biases_deltas[i];
   }
 
@@ -580,8 +543,8 @@ MLPE_CODE MLP_train(MLP* mlp,
               const MLP_train_config* config) {
   if (!mlp || !dataset_inputs || !dataset_targets || !config) return MLPE_NULL_PTR;
   // inputs and target sizes
-  uint16_t isize = mlp->topo.layer_sizes[0];
-  uint16_t tsize = mlp->topo.layer_sizes[mlp->topo.num_layers - 1];
+  uint16_t isize = mlp->layer_sizes[0];
+  uint16_t tsize = mlp->layer_sizes[mlp->num_layers - 1];
 
   MLPE_CODE ecode = MLPE_SUCCESS;
   for (size_t epoch = 0; epoch < config->epochs; ++epoch) {
@@ -603,8 +566,8 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
               const MLP_train_config* config) {
   if (!mlp || !dataset_inputs || !dataset_targets || !config || !config->logging_func) return MLPE_NULL_PTR;
 
-  uint16_t isize = mlp->topo.layer_sizes[0];
-  uint16_t tsize = mlp->topo.layer_sizes[mlp->topo.num_layers - 1];
+  uint16_t isize = mlp->layer_sizes[0];
+  uint16_t tsize = mlp->layer_sizes[mlp->num_layers - 1];
 
   float* output = (float*)malloc(tsize * sizeof(float));
   if (!output) return MLPE_MALLOC;
@@ -667,8 +630,8 @@ MLPE_CODE MLP_train_logged(MLP* mlp,
  * 1. num_layers              - uint16_t
  * 2. hidden_layer_activation - Activation
  * 3. output_layer_activation - Activation
- * 4. layer_sizes             - Activation     [num_layers]
- * 5. weights                 - uint16_t array [weights_size]
+ * 4. layer_sizes             - uint16_t array [num_layers]
+ * 5. weights                 - float array    [weights_size]
  * 6. biases                  - float array    [all_size]
  */
 
@@ -679,26 +642,14 @@ MLPE_CODE MLP_save(const MLP* mlp, const char* filename) {
     return MLPE_FILE_ERROR;
   }
 
-  const Topology* topo = &(mlp->topo);
-
-  fwrite(&(topo->num_layers), sizeof(uint16_t), 1, file);
+  fwrite(&(mlp->num_layers), sizeof(uint16_t), 1, file);
   fwrite(&(mlp->hidden_layer_activation), sizeof(Activation), 1, file);
   fwrite(&(mlp->output_layer_activation), sizeof(Activation), 1, file);
 
-  fwrite(topo->layer_sizes, sizeof(uint16_t), topo->num_layers, file);
+  fwrite(mlp->layer_sizes, sizeof(uint16_t), mlp->num_layers, file);
 
-  size_t weights_size = 0;
-  for (uint16_t i = 0; i < topo->num_layers - 1; ++i) {
-      weights_size += (size_t)topo->layer_sizes[i] * topo->layer_sizes[i + 1];
-  }
-
-  size_t all_size = 0;
-  for (uint16_t i = 0; i < topo->num_layers; ++i) {
-      all_size += topo->layer_sizes[i];
-  }
-
-  fwrite(mlp->weights, sizeof(float), weights_size, file);
-  fwrite(mlp->biases, sizeof(float), all_size, file);
+  fwrite(mlp->weights, sizeof(float), mlp->weights_size, file);
+  fwrite(mlp->biases, sizeof(float), mlp->all_size, file);
 
   fclose(file);
   return MLPE_SUCCESS;
@@ -732,35 +683,17 @@ MLPE_CODE MLP_load(MLP* mlp, const char* filename) {
     return MLPE_FILE_ERROR;
   }
 
-  Topology topo;
-  MLPE_CODE ecode = Topology_init(&topo, num_layers, layer_sizes);
-  if (ecode) {
-    free(layer_sizes);
-    fclose(file);
-    return ecode;
-  }
+  // MLP_initialise copies the layer sizes, so our temporary buffer can go
+  MLPE_CODE ecode = MLP_initialise(mlp, num_layers, layer_sizes, hidden_act, output_act);
   free(layer_sizes);
   layer_sizes = NULL;
-
-  ecode = MLP_initialise(mlp, topo, hidden_act, output_act);
   if (ecode) {
-    Topology_free(&topo);
     fclose(file);
     return ecode;
   }
 
-  size_t weights_size = 0;
-  for (uint16_t i = 0; i < topo.num_layers - 1; ++i) {
-    weights_size += (size_t)topo.layer_sizes[i] * topo.layer_sizes[i + 1];
-  }
-
-  size_t all_size = 0;
-  for (uint16_t i = 0; i < topo.num_layers; ++i) {
-    all_size += topo.layer_sizes[i];
-  }
-
-  if (fread(mlp->weights, sizeof(float), weights_size, file) != weights_size ||
-    fread(mlp->biases, sizeof(float), all_size, file) != all_size) {
+  if (fread(mlp->weights, sizeof(float), mlp->weights_size, file) != mlp->weights_size ||
+    fread(mlp->biases, sizeof(float), mlp->all_size, file) != mlp->all_size) {
     MLP_free(mlp);
     fclose(file);
     return MLPE_FILE_ERROR;

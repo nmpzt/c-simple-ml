@@ -13,12 +13,8 @@ int main(void) {
   XS256_state rng;
   XS256_seed(&rng, 666);
 
-  Topology mytopo;
-  Topology_init(&mytopo, 3, (uint16_t[]) {2, 3, 1});
-
   MLP mymlp;
-
-  MLP_initialise(&mymlp, mytopo, ACT_logistic, ACT_logistic);
+  MLP_initialise(&mymlp, 3, (uint16_t[]) {2, 3, 1}, ACT_logistic, ACT_logistic);
 
   MLP_populate(&mymlp, INIT_Xavier, &rng);
 

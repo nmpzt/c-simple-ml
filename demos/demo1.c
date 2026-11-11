@@ -22,7 +22,7 @@ int main(void) {
 
   float output[1] = {0};
   for (int i = 0; i < 4; ++i) {
-    MLP_set_inputs(&mynn, inputs + i);
+    MLP_set_inputs(&mynn, inputs + 2*i);
     MLP_evaluate(&mynn);
     MLP_get_outputs(&mynn, output);
     printf("%g\n", output[0]);
